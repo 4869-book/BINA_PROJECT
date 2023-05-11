@@ -1,0 +1,13 @@
+opencv-python
+shutil
+glob2
+PIL
+tqdm
+pickle
+facenet_pytorch
+torch
+matplotlib
+scikit-learn
+pandas
+torchvision
+numpy
