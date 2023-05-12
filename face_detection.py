@@ -54,95 +54,6 @@ class ResizeUtils:
         h = int(round(target_width * image.shape[0] / image.shape[1]))
         return cv2.resize(image, (target_width, h), interpolation=method)
 
-# สกัดภาพจากแต่ละเฟรมใน vdo
-class FramesGenerator:
-    def __init__(self, FootageSource):
-        self.FootageSource = FootageSource
-    
-    def AutoResize(self, frame):
-        resizeUtils = ResizeUtils()
-
-        height, width, _ = frame.shape
-
-        if height > 500:
-            frame = resizeUtils.rescale_by_height(frame, 500)
-            self.AutoResize(frame)
-        
-        if width > 700:
-            frame = resizeUtils.rescale_by_width(frame, 700)
-            self.AutoResize(frame)
-        
-        return frame
-    
-    def GenerateFrame(self, OutputDirectoryName):
-        cap = cv2.VideoCapture(self.FootageSource)
-        _, frame = cap.read()
-
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        TotalFrame = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-
-        print(f"[INFO] Total Frames {TotalFrame} @ {fps} fps")
-        print(f"[INFO] Calculating number of frames per secound")
-    
-        CurrentDirectory = os.path.curdir
-        OutputDirectoryPath = os.path.join(CurrentDirectory, OutputDirectoryName)
-
-        if os.path.exists(OutputDirectoryPath):
-            shutil.rmtree(OutputDirectoryPath)
-        os.mkdir(OutputDirectoryPath)
-
-        CurrentFrame = 1
-        fpsCouter = 0
-        FrameWrittenCount = 1
-
-        with tqdm(total=TotalFrame) as pbar:
-            while CurrentFrame < TotalFrame:
-                _, frame = cap.read()
-                if (frame is None):
-                    continue
-
-                if fpsCouter > fps:
-                    fpsCouter = 0
-
-                    # frame = self.AutoResize(frame)
-
-                    filename = f'frame_{str(FrameWrittenCount)}.jpg'
-                    cv2.imwrite(os.path.join(OutputDirectoryPath,filename), frame)
-
-                    FrameWrittenCount += 1
-                
-                fpsCouter += 1
-                CurrentFrame +=1
-
-                pbar.update(1)
-                # tqdm.write(f'Processed {CurrentFrame}/{TotalFrame} frames')
-
-        print('[INFO] Frames extracted')
-
-class FaceImageGenerator:
-    def __init__(self, EncodingFilePath):
-        self.EncodingFilePath = EncodingFilePath
-
-    def GenerateImages(self, labels, OutputFolderName = "ClusteredFaces"):
-        output_directory = os.getcwd()
-
-        OutputFolder = os.path.join(output_directory, OutputFolderName)
-        if not os.path.exists(OutputFolder):
-            os.makedirs(OutputFolder)
-        else:
-            shutil.rmtree(OutputFolder)
-            time.sleep(0.5)
-            os.makedirs(OutputFolder)
-
-        
-class FaceEncoder:
-    def __init__(self, input_path):
-        self.input_path = input_path
-        self.allfile = glob(f'{input_path}/*.jpg')
-    
-    def embedding(self):
-        return self.allfile
-
 # ค้นหาใบหน้า
 class FramesGeneratorPickle:
     def __init__(self, FootageSource):
@@ -186,7 +97,7 @@ class FramesGeneratorPickle:
                 continue
             # Add to batch
 
-            frame = self.AutoResize(frame)
+            # frame = self.AutoResize(frame)
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frames.append(Image.fromarray(frame))
@@ -215,7 +126,7 @@ class FramesGeneratorPickle:
             faces = mtcnn(frame)
             if faces is not None:
                 for face in faces:
-                    t = resnet(face.unsqueeze(0)).squeeze().cpu().tolist()
+                    t = resnet(face.unsqueeze(0)).squeeze().cpu()
                     # face_embs.append(t)
                     data = {'tensor_embbeding':face ,'embedding':t}
                     pickle.dump(data, open(f'{SaveDirectoryPath}/face{num}.pkl','wb'))
@@ -249,7 +160,7 @@ class FramesGeneratorPickle:
                     # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                     t = resnet(face.unsqueeze(0)).squeeze().cpu().tolist()
                     # cv2.imwrite(f'{SaveDirectoryPath}/face_{num}.jpg', face)
-                    data = {'image':image ,'embedded':t}
+                    data = {'image':cv2.resize(image, (160, 160)) ,'embedded':t}
                     pickle.dump(data, open(f'{SaveDirectoryPath}/face{num}.pkl','wb'))
                     num+=1
         print(f'[INFO] Found {num} faces')
@@ -278,7 +189,7 @@ class FramesGeneratorPickle:
         # plt.axis('off')
         # plt.show()
     
-    def clusterFace(self,inputpath):
+    def clusterFaceAndShow(self,inputpath):
         CurrentDirectory = os.path.curdir
         OutputDirectoryPath = os.path.join(CurrentDirectory, inputpath)
 
@@ -290,6 +201,7 @@ class FramesGeneratorPickle:
             face = pickle.load(open(file,'rb'))
             pics.append(face['image'])
             faces.append(face['embedded'])
+
         target = int(len(faces)/2)
         x = PCA(n_components=target).fit_transform(faces)
 
@@ -314,13 +226,49 @@ class FramesGeneratorPickle:
         # plt.scatter(x[:,0], x[:,1], c=labels, cmap='viridis')
         # plt.scatter(centroids[:,0], centroids[:,1], marker="x", color='r')
         # plt.show()
+
+    def ClusterFace(self, InputPath, ClusterSavePath):
+        CurrentDirectory = os.path.curdir
+        TargetDirectoryPath = os.path.join(CurrentDirectory, InputPath)
+
+        OutputDitrctoryPath = os.path.join(CurrentDirectory, ClusterSavePath)
+
+        if os.path.exists(OutputDitrctoryPath):
+            shutil.rmtree(OutputDitrctoryPath)
+        os.mkdir(OutputDitrctoryPath)
+
+        face_file = glob(f'{TargetDirectoryPath}/*pkl')
+
+        embeddeds = []
+        images = []
+        for i,file in enumerate(face_file):
+            face = pickle.load(open(file,'rb'))
+            images.append(face['image'])
+            embeddeds.append(face['embedded'])
+
+        target = int(len(embeddeds)/2)
+        x = PCA(n_components=target).fit_transform(embeddeds)
+
+        model = KMeans(n_clusters=best_K(x), random_state=0, n_init="auto").fit(x)
+
+        labels = model.predict(x)
+
+        print(f'[INFO] Saving data')
+        for i, label in enumerate(tqdm(labels)):
+            data = {'image':images[i] ,'embedded':embeddeds[i], 'label': label}
+            
+            if not os.path.exists(f'{OutputDitrctoryPath}/{label}'):
+                os.mkdir(f'{OutputDitrctoryPath}/{label}')
+                
+            pickle.dump(data, open(f'{OutputDitrctoryPath}/{label}/face{i}_{label}.pkl','wb'))
+
+        
         
 
 if __name__ == "__main__":
 
-    framesGenerator = FramesGeneratorPickle('../dataset/video3.mp4')
+    framesGenerator = FramesGeneratorPickle('../dataset/video7.mp4')
     framesGenerator.GenerateFrame("FramesPickle") #เปลี่ยนวิดีโอเป็นเฟรม
     framesGenerator.faceDetectSave("FramesPickle",'FacesPickleSave') #เปลี่ยนวิดีโอเป็นเฟรม
-    # framesGenerator.faceDetect("FramesPickle",'FacesPickle') #detect หน้าในเฟรม
     # framesGenerator.plotShow('FacesPickleSave') # พล็อตโชว์
-    framesGenerator.clusterFace('FacesPickleSave') # พล็อตโชว์คลัสเตอร์
+    framesGenerator.ClusterFace('FacesPickleSave','Clustered') # พล็อตโชว์คลัสเตอร์
