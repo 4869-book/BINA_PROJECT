@@ -1,9 +1,7 @@
 opencv-python
-shutil
 glob2
-PIL
 tqdm
-pickle
+pickle4 == 0.0.1
 facenet_pytorch
 torch
 matplotlib
