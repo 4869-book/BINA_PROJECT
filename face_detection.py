@@ -74,7 +74,7 @@ class FramesGeneratorPickle:
         
         return frame
     
-    def GenerateFrame(self, OutputDirectoryName):
+    def GenerateFace(self, OutputDirectoryName,fps):
         v_cap = cv2.VideoCapture(self.FootageSource)
         v_len = int(v_cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -89,118 +89,52 @@ class FramesGeneratorPickle:
         for i in tqdm(range(v_len)):
 
             success = v_cap.grab()
-            if i % 60 == 0:
+            if i % fps == 0:
                 success, frame = v_cap.retrieve()
             else:
                 continue
             if not success:
                 continue
             # Add to batch
+            
+            faces,probs = mtcnn.detect(frame)
 
-            # frame = self.AutoResize(frame)
-
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frames.append(Image.fromarray(frame))
-            pickle.dump(frame, open(f'{OutputDirectoryPath}/frame{i}.pkl','wb'))
-
-            # pickle.dump(frames, open(os.path.join(OutputDirectoryPath,'frames.pkl'),'wb'))
-        # pickle.dump(frames, open('model.pkl','wb'))
-
-    def faceDetect(self, OutputDirectoryName,SaveDirectoryName): 
-        
-        CurrentDirectory = os.path.curdir
-        OutputDirectoryPath = os.path.join(CurrentDirectory, OutputDirectoryName)
-        
-        SaveDirectoryPath = os.path.join(CurrentDirectory, SaveDirectoryName)
-
-        if os.path.exists(SaveDirectoryPath):
-            shutil.rmtree(SaveDirectoryPath)
-        os.mkdir(SaveDirectoryPath)
-
-        paths = glob(f'{OutputDirectoryPath}/*.pkl')
-        print('[INFO] Face Detecting')
-        face_embs = []
-        num = 0
-        for i in tqdm(range(len(paths))):
-            frame = pickle.load(open(paths[i],'rb'))
-            faces = mtcnn(frame)
             if faces is not None:
-                for face in faces:
-                    t = resnet(face.unsqueeze(0)).squeeze().cpu()
-                    # face_embs.append(t)
-                    data = {'tensor_embbeding':face ,'embedding':t}
-                    pickle.dump(data, open(f'{SaveDirectoryPath}/face{num}.pkl','wb'))
-                    num+=1
-        print(f'[INFO] Found {num} faces')
-        # return face_embs
-
-    def faceDetectSave(self, OutputDirectoryName,SaveDirectoryName): 
-        
-        CurrentDirectory = os.path.curdir
-        OutputDirectoryPath = os.path.join(CurrentDirectory, OutputDirectoryName)
-        
-        SaveDirectoryPath = os.path.join(CurrentDirectory, SaveDirectoryName)
-
-        if os.path.exists(SaveDirectoryPath):
-            shutil.rmtree(SaveDirectoryPath)
-        os.mkdir(SaveDirectoryPath)
-
-        paths = glob(f'{OutputDirectoryPath}/*.pkl')
-        print('[INFO] Face Detecting')
-        face_embs = []
-        num = 0
-        for i in tqdm(range(len(paths))):
-            frame = pickle.load(open(paths[i],'rb'))
-            boxes,_ = mtcnn.detect(frame)
-            faces = mtcnn(frame)
-            if boxes is not None:
-                for box, face in zip(boxes,faces):
-                    x1, y1, x2, y2 = box.astype(int)
-                    image = frame[y1:y2, x1:x2]
-                    # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                    t = resnet(face.unsqueeze(0)).squeeze().cpu().tolist()
-                    # cv2.imwrite(f'{SaveDirectoryPath}/face_{num}.jpg', face)
-                    data = {'image':cv2.resize(image, (160, 160)) ,'embedded':t}
-                    pickle.dump(data, open(f'{SaveDirectoryPath}/face{num}.pkl','wb'))
-                    num+=1
-        print(f'[INFO] Found {num} faces')
-        # return face_embs    
-
-    def plotShow(self,inputpath):
-        CurrentDirectory = os.path.curdir
-        OutputDirectoryPath = os.path.join(CurrentDirectory, inputpath)
-
-        face_file = glob(f'{inputpath}/*pkl')
-
-        faces = []
-        pic = []
-        for i,file in enumerate(face_file):
-            face = pickle.load(open(file,'rb'))
-            faces.append(face['image'])
-            pic.append(face['embedded'])
-        
-        x = PCA(n_components=50).fit_transform(pic)
-
-        plt.scatter(x[:,0], x[:,1], cmap='viridis')
-        plt.show()
-
-        # Visualize
-        # plt.imshow(faces[0])
-        # plt.axis('off')
-        # plt.show()
+                for j, box in enumerate(faces):
+                    if probs[j] > 0.8:
+                        x1, y1, x2, y2 = box.astype(int)
+                
+                        # Get embedding for detected face
+                        face = frame[y1:y2, x1:x2]
+                        if face.size != 0:
+                            face = cv2.resize(face, (160,160))
+                            score = Img_process(face)
+                            # print(f'frame {i} face {j} = {score.getScore()}')
+                            if score.getScore() > 0.2:
+                                # cv2.imwrite(f"./output/{i}_{j}.jpg", face)
+                                img = ToTensor()(face)
+                                t = resnet(img.unsqueeze(0)).squeeze().cpu()
+                                # face_embs.append(t)
+                                data = {'image':face ,'embedded':t}
+                                frames.append(data)
+        pickle.dump(frames, open(f'{OutputDirectoryPath}/faceall.pkl','wb'))                        
     
-    def clusterFaceAndShow(self,inputpath):
+    def clusterFaceAndShow(self, InputPath, ClusterSavePath):
         CurrentDirectory = os.path.curdir
-        OutputDirectoryPath = os.path.join(CurrentDirectory, inputpath)
+        filepath = os.path.join(CurrentDirectory, InputPath)
 
-        face_file = glob(f'{inputpath}/*pkl')
+        ClusterImgPath =  os.path.join(CurrentDirectory, 'Clusters')
+        if os.path.exists(ClusterImgPath):
+            shutil.rmtree(ClusterImgPath)
+        os.mkdir(ClusterImgPath)
 
+        files = pickle.load(open(f'{filepath}/faceall.pkl','rb'))
         faces = []
-        pics = []
-        for i,file in enumerate(face_file):
-            face = pickle.load(open(file,'rb'))
-            pics.append(face['image'])
-            faces.append(face['embedded'])
+        images = []
+        print(len(files))
+        for i,file in enumerate(files):
+            images.append(file['image'])
+            faces.append(file['embedded'].detach().numpy())
 
         target = int(len(faces)/2)
         x = PCA(n_components=target).fit_transform(faces)
@@ -214,54 +148,29 @@ class FramesGeneratorPickle:
             cluster_indices = np.where(labels == i)[0]
             distances = np.linalg.norm(x[cluster_indices] - model.cluster_centers_[i], axis=1)
             closest_index = cluster_indices[np.argmin(distances)]
+            cv2.imwrite(f"./{ClusterImgPath}/cluster_{i}.jpg", images[closest_index])
             examples.append(closest_index)
 
         print(f'[INFO] Got {len(examples)} clusters')
+        self.data = x
+        self.label = labels
 
-        fig, axes = plt.subplots(1, len(examples),figsize=(8, 4))
-        for index, ax in zip(examples, axes):
-            ax.imshow(pics[index])
+        
+
+    def scatter(self):
+        plt.scatter(self.data[:,0], self.data[:,1], c=self.label, cmap='viridis')
         plt.show()
 
-        # plt.scatter(x[:,0], x[:,1], c=labels, cmap='viridis')
-        # plt.scatter(centroids[:,0], centroids[:,1], marker="x", color='r')
-        # plt.show()
+class Img_process:
+    def __init__(self, ImgInput):
+        self.img = ImgInput
 
-    def ClusterFace(self, InputPath, ClusterSavePath):
-        CurrentDirectory = os.path.curdir
-        TargetDirectoryPath = os.path.join(CurrentDirectory, InputPath)
-
-        OutputDitrctoryPath = os.path.join(CurrentDirectory, ClusterSavePath)
-
-        if os.path.exists(OutputDitrctoryPath):
-            shutil.rmtree(OutputDitrctoryPath)
-        os.mkdir(OutputDitrctoryPath)
-
-        face_file = glob(f'{TargetDirectoryPath}/*pkl')
-
-        embeddeds = []
-        images = []
-        for i,file in enumerate(face_file):
-            face = pickle.load(open(file,'rb'))
-            images.append(face['image'])
-            embeddeds.append(face['embedded'])
-
-        target = int(len(embeddeds)/2)
-        x = PCA(n_components=target).fit_transform(embeddeds)
-
-        model = KMeans(n_clusters=best_K(x), random_state=0, n_init="auto").fit(x)
-
-        labels = model.predict(x)
-
-        print(f'[INFO] Saving data')
-        for i, label in enumerate(tqdm(labels)):
-            data = {'image':images[i] ,'embedded':embeddeds[i], 'label': label}
-            
-            if not os.path.exists(f'{OutputDitrctoryPath}/{label}'):
-                os.mkdir(f'{OutputDitrctoryPath}/{label}')
-                
-            pickle.dump(data, open(f'{OutputDitrctoryPath}/{label}/face{i}_{label}.pkl','wb'))
-
+    def getScore(self):
+        gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        lap_var = cv2.Laplacian(gray, cv2.CV_64F).var()
+        laplacian_score = min(max(lap_var / 100, 0), 100)
+        return laplacian_score
+        
         
         
 
