@@ -1,12 +1,13 @@
 from face_detection import *
 
 # find distance
-def extract_face_frame2(img):
+def face2emb(img):
+    img = cv2.imread(img)
     img = ToTensor()(img)
     embeddings = resnet(img.unsqueeze(0)).detach().cpu()
     return embeddings
 
-def extract_face_target2(img):
+def face2emb2(img):
     img = ToTensor()(img)
     embeddings = resnet(img.unsqueeze(0)).detach().cpu()
     return embeddings
@@ -18,12 +19,12 @@ class Blurring:
     def TargetFace(self, target):
         alltarget = []
         for i in target:
-            alltarget += glob(f'./Clustered/{i}/*.pkl')
+            alltarget += glob(f'./Clusters/cluster_{i}.jpg')
 
         embeddeds = []
         for i,file in enumerate(alltarget):
-            face = pickle.load(open(file,'rb'))
-            embeddeds.append(face['image'])
+            face = face2emb(file)
+            embeddeds.append(face)
 
         self.FaceTarget = embeddeds
 
@@ -32,9 +33,9 @@ class Blurring:
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         # Define known faces and their names
-        known_faces = [
-            (extract_face_target2(path)) for path in self.FaceTarget
-        ]
+        # known_faces = [
+        #     (face2emb(path)) for path in self.FaceTarget
+        # ]
         
         # Define the codec and create VideoWriter object
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -55,14 +56,14 @@ class Blurring:
                 
                             # Get embedding for detected face
                             face = frame[y1:y2, x1:x2]
-                            embedding = extract_face_frame2(cv2.resize(face, (160, 160)))
+                            embedding = face2emb2(face)
                 
                             # Compare with known faces
-                            distances = [np.linalg.norm(embedding - f) for f in known_faces]
-
+                            distances = [np.linalg.norm(embedding - f) for f in self.FaceTarget]
+                            print(distances)
                             min_distance = min(distances)
                         
-                            if min_distance > 0.5:
+                            if min_distance > 0.7:
                                 name = 'unknown'
                                 color = (0, 0, 255) # red for unrecognized faces
                                 blur = cv2.blur(face, (25, 25))
@@ -71,14 +72,14 @@ class Blurring:
                 # Save the frame to output video
                 out.write(frame)                  
                 
-            #     cv2.imshow('Frame', frame)
-            #     if cv2.waitKey(1) & 0xFF == ord('q'): # press 'q' to exit
-            #         break
-            # else:
-            #     break
+                cv2.imshow('Frame', frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'): # press 'q' to exit
+                    break
+            else:
+                break
         cap.release()
         out.release()
-        # cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     blur = Blurring('../dataset/video7.mp4')
