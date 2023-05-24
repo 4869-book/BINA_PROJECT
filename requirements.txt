@@ -1,0 +1,14 @@
+opencv-python
+glob2
+tqdm
+pickle4 == 0.0.1
+facenet_pytorch
+torch
+matplotlib
+scikit-learn
+pandas
+torchvision
+numpy
+tk
+customtkinter
+moviepy
