@@ -132,32 +132,46 @@ class Blurring:
         out = cv2.VideoWriter(
             export_path, fourcc, frame_count, (int(cap.get(3)), int(cap.get(4)))
         )
+        skip_number = 6
+        print("Skip frame : ", skip_number)
 
+        number_of_frame_skip = skip_number + 1
+        is_frame_skip = 0
+        face_location = []
         print(f"[INFO] Start bluring process")
         for _ in tqdm(range(frame_count)):
             ret, frame = cap.read()
             if ret == True:
-                # Detect faces in the frame
-                boxes, probs = mtcnn.detect(frame)
+                if is_frame_skip % number_of_frame_skip == 0:
+                    # Detect faces in the frame
+                    boxes, probs = mtcnn.detect(frame)
 
-                if boxes is not None:
-                    # Iterate over detected faces
-                    for i, box in enumerate(boxes):
-                        if probs[i] > 0.9:
-                            x1, y1, x2, y2 = box.astype(int)
+                    if boxes is not None:
+                        # Iterate over detected faces
+                        for i, box in enumerate(boxes):
+                            if probs[i] > 0.9:
+                                x1, y1, x2, y2 = box.astype(int)
 
-                            # Get embedding for detected face
-                            face = frame[y1:y2, x1:x2]
+                                # Get embedding for detected face
+                                face = frame[y1:y2, x1:x2]
 
-                            blur = cv2.blur(face, (25, 25))
-                            frame[y1:y2, x1:x2] = blur
+                                blur = cv2.blur(face, (25, 25))
+                                frame[y1:y2, x1:x2] = blur
+                                face_location.append([x1, y1, x2, y2])
 
-                # Save the frame to output video
+                else:
+                    for box in face_location:
+                        x1 = box[0]
+                        y1 = box[1]
+                        x2 = box[2]
+                        y2 = box[3]
+                        blur = cv2.blur(frame[y1:y2, x1:x2], (25, 25))
+                        frame[y1:y2, x1:x2] = blur
+
+                    if is_frame_skip % number_of_frame_skip == number_of_frame_skip - 1:
+                        face_location = []
+
                 out.write(frame)
-
-                # cv2.imshow("Frame", frame)
-                # if cv2.waitKey(1) & 0xFF == ord("q"):  # press 'q' to exit
-                #     break
             else:
                 break
         cap.release()
