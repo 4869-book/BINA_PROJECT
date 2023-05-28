@@ -225,12 +225,8 @@ class ExportFrame(ctk.CTkFrame):
             return
 
         if self.driver.mode == 0:
-            self.thread = threading.Thread(
-                target=self.driver.blur_except_output, name="blur"
-            )
-            self.thread.start()
+            print("blur except")
+            self.driver.blur_except_output()
         else:
-            self.thread = threading.Thread(
-                target=self.driver.blur_all_output(), name="blur"
-            )
-            self.thread.start()
+            print("blur all")
+            self.driver.blur_all_output()

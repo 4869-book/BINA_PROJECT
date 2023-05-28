@@ -23,7 +23,11 @@ print(f"Running on device: {device}")
 
 # Create face detector
 mtcnn = MTCNN(
-    keep_all=True, post_process=True, thresholds=[0.95, 0.95, 0.95], device=device
+    keep_all=True,
+    post_process=True,
+    thresholds=[0.6, 0.9, 0.9],
+    device=device,
+    min_face_size=160,
 )
 resnet = InceptionResnetV1(pretrained="vggface2").eval().to(device)
 
@@ -92,6 +96,7 @@ class FramesGeneratorPickle:
         os.mkdir(OutputDirectoryPath)
 
         frames = []
+        file_count = 0
         for i in tqdm(range(v_len)):
             success = v_cap.grab()
             if i % fps == 0:
@@ -115,14 +120,26 @@ class FramesGeneratorPickle:
                             face = cv2.resize(face, (160, 160))
                             score = Img_process(face)
                             # print(f'frame {i} face {j} = {score.getScore()}')
-                            if score.getScore() > 0.2:
+                            if score.getScore() > 0:
                                 # cv2.imwrite(f"./output/{i}_{j}.jpg", face)
                                 img = ToTensor()(face)
                                 t = resnet(img.unsqueeze(0).to(device)).squeeze().cpu()
                                 # face_embs.append(t)
                                 data = {"image": face, "embedded": t}
-                                frames.append(data)
-        pickle.dump(frames, open(f"{OutputDirectoryPath}/faceall.pkl", "wb"))
+                                pickle.dump(
+                                    data,
+                                    open(
+                                        f"{OutputDirectoryPath}/image_{file_count}.pkl",
+                                        "wb",
+                                    ),
+                                )
+                                cv2.imwrite(
+                                    f"./{OutputDirectoryPath}/image{file_count}.jpg",
+                                    face,
+                                )
+                                file_count = file_count + 1
+                                # frames.append(data)
+        # pickle.dump(frames, open(f"{OutputDirectoryPath}/faceall.pkl", "wb"))
 
     def clusterFaceAndShow(self, InputPath, ClusterSavePath):
         CurrentDirectory = os.path.curdir
@@ -133,13 +150,15 @@ class FramesGeneratorPickle:
             shutil.rmtree(ClusterImgPath)
         os.mkdir(ClusterImgPath)
 
-        files = pickle.load(open(f"{filepath}/faceall.pkl", "rb"))
+        # files = pickle.load(open(f"{filepath}/faceall.pkl", "rb"))
+        files = sorted(glob("./FramesPickle/*.pkl"))
         faces = []
         images = []
         print(len(files))
         for i, file in enumerate(files):
-            images.append(file["image"])
-            faces.append(file["embedded"].detach().numpy())
+            data = pickle.load(open(f"{file}", "rb"))
+            images.append(data["image"])
+            faces.append(data["embedded"].detach().numpy())
 
         target = int(len(faces) / 2)
         x = PCA(n_components=target).fit_transform(faces)

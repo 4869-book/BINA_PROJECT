@@ -48,16 +48,20 @@ class Blurring:
         )
 
         print(f"[INFO] Start bluring process")
-        is_skip_frame = False
+        skip_number = 6
+        number_of_frame_skip = skip_number + 1
+        is_frame_skip = 0
         face_location = []
         for _ in tqdm(range(frame_count)):
             ret, frame = cap.read()
+            is_frame_skip += 1
             if ret == True:
                 # Detect faces in the frame
-                if not is_skip_frame:
+                # if True:
+                if is_frame_skip % number_of_frame_skip == 0:
+                    print("DETECT frame: ", is_frame_skip)
                     boxes, probs = mtcnn.detect(frame)
                     if boxes is not None:
-                        is_skip_frame += 1
                         # Iterate over detected faces
                         for i, box in enumerate(boxes):
                             if probs[i] > 0.9:
@@ -88,6 +92,7 @@ class Blurring:
                                         frame[y1:y2, x1:x2] = blur
                                         face_location.append([x1, y1, x2, y2])
                 else:
+                    print("SKIP frame: ", is_frame_skip)
                     for box in face_location:
                         x1 = box[0]
                         y1 = box[1]
@@ -96,11 +101,11 @@ class Blurring:
                         blur = cv2.blur(frame[y1:y2, x1:x2], (25, 25))
                         frame[y1:y2, x1:x2] = blur
 
-                    face_location = []
+                    if is_frame_skip % number_of_frame_skip == number_of_frame_skip - 1:
+                        face_location = []
 
                 # Save the frame to output video
                 out.write(frame)
-                is_skip_frame = not is_skip_frame
 
                 # cv2.imshow("Frame", frame)
                 # if cv2.waitKey(1) & 0xFF == ord("q"):  # press 'q' to exit
@@ -149,9 +154,9 @@ class Blurring:
                 # Save the frame to output video
                 out.write(frame)
 
-                cv2.imshow("Frame", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):  # press 'q' to exit
-                    break
+                # cv2.imshow("Frame", frame)
+                # if cv2.waitKey(1) & 0xFF == ord("q"):  # press 'q' to exit
+                #     break
             else:
                 break
         cap.release()
