@@ -1,5 +1,7 @@
 from face_detection import *
 
+mtcnn2 = MTCNN(keep_all=True, min_face_size=130)
+
 
 # find distance
 def face2emb(img):
@@ -61,11 +63,11 @@ class Blurring:
                 # if True:
                 if is_frame_skip % number_of_frame_skip == 0:
                     # print("DETECT frame: ", is_frame_skip)
-                    boxes, probs = mtcnn.detect(frame)
+                    boxes, probs = mtcnn2.detect(frame)
                     if boxes is not None:
                         # Iterate over detected faces
                         for i, box in enumerate(boxes):
-                            if probs[i] > 0.9:
+                            if probs[i] > 0.8:
                                 x1, y1, x2, y2 = box.astype(int)
 
                                 # Get embedding for detected face
@@ -128,9 +130,9 @@ class Blurring:
 
         # Define the codec and create VideoWriter object
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        # fps = int(cap.get(cv2.CAP_PROP_FPS))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
         out = cv2.VideoWriter(
-            export_path, fourcc, frame_count, (int(cap.get(3)), int(cap.get(4)))
+            export_path, fourcc, fps, (int(cap.get(3)), int(cap.get(4)))
         )
         skip_number = 6
         print("Skip frame : ", skip_number)
@@ -141,15 +143,16 @@ class Blurring:
         print(f"[INFO] Start bluring process")
         for _ in tqdm(range(frame_count)):
             ret, frame = cap.read()
+            is_frame_skip += 1
             if ret == True:
                 if is_frame_skip % number_of_frame_skip == 0:
                     # Detect faces in the frame
-                    boxes, probs = mtcnn.detect(frame)
+                    boxes, probs = mtcnn2.detect(frame)
 
                     if boxes is not None:
                         # Iterate over detected faces
                         for i, box in enumerate(boxes):
-                            if probs[i] > 0.9:
+                            if probs[i] > 0.8:
                                 x1, y1, x2, y2 = box.astype(int)
 
                                 # Get embedding for detected face
