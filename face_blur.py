@@ -134,7 +134,7 @@ class Blurring:
         out = cv2.VideoWriter(
             export_path, fourcc, fps, (int(cap.get(3)), int(cap.get(4)))
         )
-        skip_number = 6
+        skip_number = 0
         print("Skip frame : ", skip_number)
 
         number_of_frame_skip = skip_number + 1
@@ -154,13 +154,13 @@ class Blurring:
                         for i, box in enumerate(boxes):
                             if probs[i] > 0.8:
                                 x1, y1, x2, y2 = box.astype(int)
-
                                 # Get embedding for detected face
                                 face = frame[y1:y2, x1:x2]
 
-                                blur = cv2.blur(face, (25, 25))
-                                frame[y1:y2, x1:x2] = blur
-                                face_location.append([x1, y1, x2, y2])
+                                if face.size != 0:
+                                    blur = cv2.blur(face, (25, 25))
+                                    frame[y1:y2, x1:x2] = blur
+                                    face_location.append([x1, y1, x2, y2])
 
                 else:
                     for box in face_location:
